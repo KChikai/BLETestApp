@@ -13,19 +13,21 @@ import android.view.MenuItem
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 
 class MainActivity : AppCompatActivity() {
 
     // BLE adapter
     private var mBluetoothAdapter: BluetoothAdapter? = null
     private var mDeviceAddress = ""
+    private fun PackageManager.missingSystemFeature(name: String): Boolean = !hasSystemFeature(name)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         // check if ble is supported
-        if(!packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+        packageManager.takeIf { it.missingSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE) }?.let {
             Toast.makeText(this, R.string.bluetooth_is_not_supported, Toast.LENGTH_SHORT).show()
             finish()
             return
@@ -52,34 +54,30 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-        startActivityForResult(enableBtIntent, REQUEST_ENABLE_BLUETOOTH)
+        enableBluetoothLauncher.launch(enableBtIntent)
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        when (requestCode) {
-            REQUEST_ENABLE_BLUETOOTH -> if (Activity.RESULT_CANCELED == resultCode) {
-                // User denied to use BLE feature
-                Toast.makeText(this, R.string.bluetooth_is_not_working, Toast.LENGTH_SHORT).show()
-                finish()
-                return
-            }
-            REQUEST_CONNECT_DEVICE -> {
-                val strDeviceName: String?
-                if (RESULT_OK == resultCode) {
-                    // デバイスリストアクティビティからの情報の取得
-                    strDeviceName = data?.getStringExtra(DeviceListActivity.EXTRAS_DEVICE_NAME)!!
-                    mDeviceAddress = data?.getStringExtra(DeviceListActivity.EXTRAS_DEVICE_ADDRESS)!!
-                } else {
-                    strDeviceName = ""
-                    mDeviceAddress = ""
-                }
-                (findViewById<View>(R.id.textview_devicename) as TextView).text =
-                    strDeviceName
-                (findViewById<View>(R.id.textview_deviceaddress) as TextView).text =
-                    mDeviceAddress
-            }
+    private var enableBluetoothLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        // Callback function when checking BLE is enabled or not
+        if (result.resultCode == Activity.RESULT_CANCELED) {
+            Toast.makeText(this, R.string.bluetooth_is_not_working, Toast.LENGTH_SHORT).show()
+            finish()
         }
-        super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    private var connectDeviceLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        // Callback function when connecting a devise
+        val strDeviceName: String?
+        val data: Intent? = result.data
+        if (result.resultCode == RESULT_OK) {
+            strDeviceName = data?.getStringExtra(DeviceListActivity.EXTRAS_DEVICE_NAME)!!
+            mDeviceAddress = data.getStringExtra(DeviceListActivity.EXTRAS_DEVICE_ADDRESS)!!
+        } else {
+            strDeviceName = ""
+            mDeviceAddress = ""
+        }
+        (findViewById<View>(R.id.textview_devicename) as TextView).text = strDeviceName
+        (findViewById<View>(R.id.textview_deviceaddress) as TextView).text = mDeviceAddress
     }
 
     // オプションメニュー作成時の処理
@@ -93,16 +91,10 @@ class MainActivity : AppCompatActivity() {
         when (item.itemId) {
             R.id.menuitem_search -> {
                 val deviceListActivityIntent = Intent(this, DeviceListActivity::class.java)
-                startActivityForResult(deviceListActivityIntent, REQUEST_CONNECT_DEVICE)
+                connectDeviceLauncher.launch(deviceListActivityIntent)
                 return true
             }
         }
         return false
-    }
-
-    companion object {
-        // BLE Code to request BLE feature
-        private const val REQUEST_ENABLE_BLUETOOTH = 1
-        private const val REQUEST_CONNECT_DEVICE = 2 // デバイス接続要求時の識別コード
     }
 }
