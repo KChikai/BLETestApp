@@ -83,10 +83,10 @@ class DeviceListActivity : AppCompatActivity(), AdapterView.OnItemClickListener 
     }
 
     // 定数
-    private val REQUEST_ENABLE_BLUETOOTH = 1 // Bluetooth機能の有効化要求時の識別コード
-    private val SCAN_PERIOD: Long = 10000 // スキャン時間。単位はミリ秒。
-
     companion object{
+        private const val REQUEST_ENABLE_BLUETOOTH = 1 // Bluetooth機能の有効化要求時の識別コード
+        private const val SCAN_PERIOD: Long = 10000 // スキャン時間。単位はミリ秒。
+
         const val EXTRAS_DEVICE_NAME = "DEVICE_NAME"
         const val EXTRAS_DEVICE_ADDRESS = "DEVICE_ADDRESS"
     }
