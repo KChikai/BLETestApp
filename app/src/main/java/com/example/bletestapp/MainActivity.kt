@@ -2,11 +2,10 @@ package com.example.bletestapp
 
 import android.app.Activity
 import android.bluetooth.*
-import androidx.appcompat.app.AppCompatActivity
-import android.os.Bundle
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -14,6 +13,9 @@ import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import java.util.*
+
 
 class MainActivity : AppCompatActivity(), View.OnClickListener {
 
@@ -26,6 +28,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     // GUIアイテム
     private lateinit var mButtonConnect: Button     // 接続ボタン
     private lateinit var mButtonDisconnect: Button  // 切断ボタン
+    private lateinit var mButtonReadChara1 : Button // キャラクタリスティック１の読み込みボタン
+    private lateinit var mButtonReadChara2 : Button // キャラクタリスティック２の読み込みボタン
 
     // BluetoothGattコールバック
     private val mGattCallback: BluetoothGattCallback = object : BluetoothGattCallback() {
@@ -35,6 +39,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 return
             }
             if (BluetoothProfile.STATE_CONNECTED == newState) {    // 接続完了
+                mBluetoothGatt!!.discoverServices()
                 runOnUiThread { // GUIアイテムの有効無効の設定
                     // 切断ボタンを有効にする
                     mButtonDisconnect.isEnabled = true
@@ -44,7 +49,57 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             if (BluetoothProfile.STATE_DISCONNECTED == newState) {    // 切断完了（接続可能範囲から外れて切断された）
                 // 接続可能範囲に入ったら自動接続するために、mBluetoothGatt.connect()を呼び出す。
                 mBluetoothGatt!!.connect()
+                runOnUiThread {
+                    mButtonReadChara1.isEnabled = false
+                    mButtonReadChara2.isEnabled = false
+                }
                 return
+            }
+        }
+
+        @Deprecated("Deprecated in Java")
+        override fun onCharacteristicRead(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
+            super.onCharacteristicRead(gatt, characteristic, status)
+            if (BluetoothGatt.GATT_SUCCESS != status) {
+                return
+            }
+
+            if (characteristic.uuid == UUID_CHARACTERISTIC_PRIVATE1) {
+                val intChara = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 0)
+                val strChara = "${intChara}℃"
+                runOnUiThread {
+                    (findViewById<View>(R.id.textview_readchara1) as TextView).text = strChara
+                }
+            }
+
+            if (characteristic.uuid == UUID_CHARACTERISTIC_PRIVATE2) {
+                val intChara = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT16, 0)
+                val strChara = "${intChara}ms"
+                runOnUiThread {
+                    (findViewById<View>(R.id.textview_readchara2) as TextView).text = strChara
+                }
+            }
+        }
+
+        override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+            super.onServicesDiscovered(gatt, status)
+            if( BluetoothGatt.GATT_SUCCESS != status ) { return }
+            for(service in gatt.services)
+            {
+                if( ( null == service ) || ( null == service.uuid) )
+                {
+                    continue
+                }
+                if (UUID_SERVICE_PRIVATE == service.uuid) {
+                    runOnUiThread {
+                        mButtonReadChara1.isEnabled = true
+                        mButtonReadChara2.isEnabled = true
+                    }
+                }
             }
         }
     }
@@ -56,6 +111,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         mButtonDisconnect = findViewById(R.id.button_disconnect)
         mButtonConnect.setOnClickListener(this)
         mButtonDisconnect.setOnClickListener(this)
+        mButtonReadChara1 = findViewById( R.id.button_readchara1 )
+        mButtonReadChara1.setOnClickListener( this )
+        mButtonReadChara2 = findViewById( R.id.button_readchara2 )
+        mButtonReadChara2.setOnClickListener( this )
 
         // check if ble is supported
         packageManager.takeIf { it.missingSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE) }?.let {
@@ -83,6 +142,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         // GUIアイテムの有効無効の設定
         mButtonConnect.isEnabled = false
         mButtonDisconnect.isEnabled = false
+        mButtonReadChara1.isEnabled = false
+        mButtonReadChara2.isEnabled = false
 
         // デバイスアドレスが空でなければ、接続ボタンを有効にする。
         if (mDeviceAddress != "") {
@@ -126,6 +187,14 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             disconnect() // 切断
             return
         }
+        if (mButtonReadChara1.id == v.id) {
+            readCharacteristic(UUID_SERVICE_PRIVATE, UUID_CHARACTERISTIC_PRIVATE1)
+            return
+        }
+        if (mButtonReadChara2.id == v.id) {
+            readCharacteristic(UUID_SERVICE_PRIVATE, UUID_CHARACTERISTIC_PRIVATE2)
+            return
+        }
     }
 
     private var enableBluetoothLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -149,6 +218,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }
         (findViewById<View>(R.id.textview_devicename) as TextView).text = strDeviceName
         (findViewById<View>(R.id.textview_deviceaddress) as TextView).text = mDeviceAddress
+        (findViewById<View>(R.id.textview_readchara1) as TextView).text = ""
+        (findViewById<View>(R.id.textview_readchara2) as TextView).text = ""
     }
 
     // オプションメニュー作成時の処理
@@ -192,5 +263,22 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         // 接続ボタンのみ有効にする
         mButtonConnect.isEnabled = true
         mButtonDisconnect.isEnabled = false
+        mButtonReadChara1.isEnabled = false
+        mButtonReadChara2.isEnabled = false
+    }
+
+    // キャラクタリスティックの読み込み
+    private fun readCharacteristic(uuidService: UUID, uuidCharacteristic: UUID) {
+        mBluetoothGatt ?: return
+        val bleChar = mBluetoothGatt!!.getService(uuidService).getCharacteristic(uuidCharacteristic)
+        mBluetoothGatt!!.readCharacteristic(bleChar)
+    }
+
+    // 定数（Bluetooth LE Gatt UUID）
+    companion object {
+        // Private Service
+        private val UUID_SERVICE_PRIVATE: UUID = UUID.fromString("E95D6100-251D-470A-A062-FA1922DFA9A8")
+        private val UUID_CHARACTERISTIC_PRIVATE1: UUID = UUID.fromString("E95D9250-251D-470A-A062-FA1922DFA9A8")
+        private val UUID_CHARACTERISTIC_PRIVATE2: UUID = UUID.fromString("E95D1B25-251D-470A-A062-FA1922DFA9A8")
     }
 }
