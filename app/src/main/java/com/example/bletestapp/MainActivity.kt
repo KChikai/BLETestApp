@@ -32,6 +32,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     private lateinit var mButtonReadChara1 : Button // キャラクタリスティック１の読み込みボタン
     private lateinit var mButtonReadChara2 : Button // キャラクタリスティック２の読み込みボタン
     private lateinit var mCheckBoxNotifyChara1: CheckBox // キャラクタリスティック１の変更通知ON/OFFチェックボックス
+    private lateinit var mButtonWrite100ms: Button
+    private lateinit var mButtonWrite1000ms: Button
 
     // BluetoothGattコールバック
     private val mGattCallback: BluetoothGattCallback = object : BluetoothGattCallback() {
@@ -55,6 +57,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                     mButtonReadChara1.isEnabled = false
                     mButtonReadChara2.isEnabled = false
                     mCheckBoxNotifyChara1.isEnabled = false
+                    mButtonWrite100ms.isEnabled = false
+                    mButtonWrite1000ms.isEnabled = false
                 }
                 return
             }
@@ -102,6 +106,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                         mButtonReadChara1.isEnabled = true
                         mButtonReadChara2.isEnabled = true
                         mCheckBoxNotifyChara1.isEnabled = true
+                        mButtonWrite100ms.isEnabled = true
+                        mButtonWrite1000ms.isEnabled = true
                     }
                 }
             }
@@ -122,6 +128,22 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 return
             }
         }
+
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt?,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
+            super.onCharacteristicWrite(gatt, characteristic, status)
+            if (BluetoothGatt.GATT_SUCCESS !=  status) { return }
+            if (characteristic.uuid == UUID_CHARACTERISTIC_PRIVATE2) {
+                runOnUiThread {
+                    mButtonWrite100ms.isEnabled = true
+                    mButtonWrite1000ms.isEnabled = true
+                }
+                return
+            }
+        }
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -137,6 +159,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         mButtonReadChara2.setOnClickListener( this )
         mCheckBoxNotifyChara1 = findViewById(R.id.checkbox_notifychara1)
         mCheckBoxNotifyChara1.setOnClickListener(this)
+        mButtonWrite100ms = findViewById(R.id.button_write_100ms)
+        mButtonWrite100ms.setOnClickListener(this)
+        mButtonWrite1000ms = findViewById(R.id.button_write_1000ms)
+        mButtonWrite1000ms.setOnClickListener(this)
 
         // check if ble is supported
         packageManager.takeIf { it.missingSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE) }?.let {
@@ -168,6 +194,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         mButtonReadChara2.isEnabled = false
         mCheckBoxNotifyChara1.isEnabled = false
         mCheckBoxNotifyChara1.isChecked = false
+        mButtonWrite100ms.isEnabled = false
+        mButtonWrite1000ms.isEnabled = false
 
         // デバイスアドレスが空でなければ、接続ボタンを有効にする。
         if (mDeviceAddress != "") {
@@ -221,6 +249,18 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }
         if (mCheckBoxNotifyChara1.id == v.id) {
             setCharacteristicNotification(UUID_SERVICE_PRIVATE, UUID_CHARACTERISTIC_PRIVATE1, mCheckBoxNotifyChara1.isChecked)
+            return
+        }
+        if (mButtonWrite100ms.id == v.id) {
+            mButtonWrite100ms.isEnabled = false
+            mButtonWrite1000ms.isEnabled = false
+            writeCharacteristic(UUID_SERVICE_PRIVATE, UUID_CHARACTERISTIC_PRIVATE2, "100")
+            return
+        }
+        if (mButtonWrite1000ms.id == v.id) {
+            mButtonWrite100ms.isEnabled = false
+            mButtonWrite1000ms.isEnabled = false
+            writeCharacteristic(UUID_SERVICE_PRIVATE, UUID_CHARACTERISTIC_PRIVATE2, "1000")
             return
         }
     }
@@ -296,6 +336,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         mButtonReadChara2.isEnabled = false
         mCheckBoxNotifyChara1.isEnabled = false
         mCheckBoxNotifyChara1.isChecked = false
+        mButtonWrite100ms.isEnabled = false
+        mButtonWrite1000ms.isEnabled = false
     }
 
     // キャラクタリスティックの読み込み
@@ -313,6 +355,13 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         val descriptor = bleChar.getDescriptor(UUID_NOTIFY)
         descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
         mBluetoothGatt!!.writeDescriptor(descriptor)
+    }
+
+    private fun writeCharacteristic(uuidService: UUID, uuidCharacteristic: UUID, string: String) {
+        mBluetoothGatt ?: return
+        val bleChar = mBluetoothGatt!!.getService(uuidService).getCharacteristic(uuidCharacteristic)
+        bleChar.setValue(string.toInt(), BluetoothGattCharacteristic.FORMAT_SINT16, 0)
+        mBluetoothGatt!!.writeCharacteristic(bleChar)
     }
 
     // 定数（Bluetooth LE Gatt UUID）
